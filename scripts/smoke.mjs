@@ -34,6 +34,7 @@ try {
     Range: class { constructor(...values) { this.values = values; } },
     Diagnostic: class { constructor(range, message, severity) { Object.assign(this, { range, message, severity }); } },
     DiagnosticSeverity: { Error: 0, Warning: 1 }, ViewColumn: { One: 1, Beside: 2 },
+    StatusBarAlignment: { Left: 1, Right: 2 }, ThemeColor: class { constructor(id) { this.id = id; } },
     Uri: { file: uri, joinPath: (base, ...parts) => uri(path.join(base.fsPath, ...parts)) },
     commands: { registerCommand: (name, handler) => { commands.set(name, handler); return disposable(); } },
     languages: { createDiagnosticCollection: () => ({ clear: () => diagnostics.clear(), set: (key, value) => diagnostics.set(key.fsPath, value), dispose() {} }) },
@@ -46,6 +47,7 @@ try {
     },
     window: {
       createOutputChannel: () => ({ appendLine() {}, dispose() {} }), registerTreeDataProvider: disposable,
+      createStatusBarItem: () => ({ show() {}, dispose() {} }),
       showInformationMessage() {}, showWarningMessage() {}, showErrorMessage: message => { throw new Error(message); },
       showSaveDialog: async () => saveUri, showInputBox: async () => inputRevision, showTextDocument: async () => {},
       createWebviewPanel: () => ({
@@ -82,6 +84,13 @@ try {
     await new Promise(resolve => setTimeout(resolve, 30)); assert.equal(opened.length, 1);
     saveUri = uri(path.join(temporary, 'export.json')); await commands.get('codeXRay.export')(); assert.equal(JSON.parse(fs.readFileSync(saveUri.fsPath, 'utf8')).current.files.length, 4);
     console.log('PASS: extension activation with a mocked VS Code API, ready handshake, worker report, diagnostics, validated source opening and JSON export.');
+    saveUri = uri(path.join(temporary, 'export.png'));
+    incoming({ type: 'export-image', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' });
+    await waitFor(() => fs.existsSync(saveUri.fsPath));
+    assert.deepEqual(fs.readFileSync(saveUri.fsPath), Buffer.from('iVBORw0KGgo=', 'base64'));
+    incoming({ type: 'export-image', dataUrl: 'not-a-data-url' });
+    await new Promise(resolve => setTimeout(resolve, 30));
+    console.log('PASS: PNG map export decodes and writes only validated data URLs.');
     // Force cancellation immediately after starting another worker.
     await commands.get('codeXRay.refresh')();
   } finally {

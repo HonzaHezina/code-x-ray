@@ -23,6 +23,8 @@ function App(): React.JSX.Element {
   const [selectedFinding, setSelectedFinding] = useState('');
   const [selectedEdge, setSelectedEdge] = useState('');
   const [onlyChanges, setOnlyChanges] = useState(false);
+  const [isolate, setIsolate] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const canvas = useRef<HTMLDivElement>(null);
   const graph = useRef<Core | null>(null);
   const positions = useRef(new Map<string, { x: number; y: number }>());
@@ -36,7 +38,13 @@ function App(): React.JSX.Element {
     snapshot?.files.forEach(file => files.set(file.id, file)); snapshot?.edges.forEach(edge => edges.set(edge.id, edge));
     return { files: [...files.values()], edges: [...edges.values()] };
   }, [report, snapshot, mode]);
-  const visibleFiles = useMemo(() => data.files.filter(file => file.id.toLowerCase().includes(query.toLowerCase()) && (!onlyChanges || !diff || changed.has(file.id))), [data.files, query, onlyChanges, diff, changed]);
+  const neighborIds = useMemo(() => {
+    if (!isolate || !selected) return null;
+    const ids = new Set([selected]);
+    for (const link of data.edges) { if (link.source === selected) ids.add(link.target); if (link.target === selected) ids.add(link.source); }
+    return ids;
+  }, [isolate, selected, data.edges]);
+  const visibleFiles = useMemo(() => data.files.filter(file => file.id.toLowerCase().includes(query.toLowerCase()) && (!onlyChanges || !diff || changed.has(file.id)) && (!neighborIds || neighborIds.has(file.id))), [data.files, query, onlyChanges, diff, changed, neighborIds]);
   const selectedNode = data.files.find(file => file.id === selected);
   const finding = snapshot?.findings.find(item => item.id === selectedFinding);
   const edge = data.edges.find(item => item.id === selectedEdge);
@@ -65,6 +73,7 @@ function App(): React.JSX.Element {
         { selector: 'node.modified', style: { 'background-color': '#5b8fd6' } },
         { selector: '.removed', style: { 'line-color': '#f48496', 'target-arrow-color': '#f48496', 'line-style': 'dashed', 'border-color': '#f48496', 'border-style': 'dashed', opacity: 0.65 } },
         { selector: '.focused', style: { 'border-color': '#e2e9f1', 'border-width': 5, 'line-color': '#e2e9f1', 'target-arrow-color': '#e2e9f1', opacity: 1 } },
+        { selector: '.dimmed', style: { opacity: 0.12 } },
         { selector: 'node:selected', style: { 'overlay-opacity': 0.12, 'overlay-color': '#ffffff' } },
         { selector: 'node.hovered', style: { 'border-width': 4, 'border-color': '#ffffff', 'z-index': 999 } },
         { selector: 'edge.hovered', style: { width: 3, opacity: 1, 'line-color': '#e2e9f1', 'target-arrow-color': '#e2e9f1' } }
@@ -107,17 +116,18 @@ function App(): React.JSX.Element {
     for (const id of freshNodeIds) {
       const node = cy.getElementById(id);
       node.style('opacity', 0);
-      node.animate({ style: { opacity: 1 } }, { duration: 280, easing: 'ease-out-cubic' });
+      node.animate({ style: { opacity: 1 } }, { duration: 280, easing: 'ease-out-cubic', complete: () => node.removeStyle('opacity') });
     }
     knownIds.current = new Set(visible.map(file => file.id));
   }, [data, visibleFiles, snapshot, diff, mode, showTypes]);
 
   useEffect(() => {
     const cy = graph.current; if (!cy) return;
-    cy.elements().removeClass('focused');
+    cy.elements().removeClass('focused dimmed');
     if (finding) finding.nodes.forEach(id => cy.getElementById(id).addClass('focused'));
     if (selected) cy.getElementById(selected).closedNeighborhood().addClass('focused');
     if (edge) cy.getElementById(`edge:${edge.id}`).addClass('focused');
+    if (finding || selected || edge) cy.elements().not('.focused').addClass('dimmed');
   }, [selected, finding, edge, data, visibleFiles]);
 
   const historical = mode === 'baseline';
@@ -127,8 +137,24 @@ function App(): React.JSX.Element {
   const warningCount = (snapshot?.findings.length ?? 0) - errorCount;
   const status: 'clean' | 'warning' | 'error' = errorCount > 0 ? 'error' : warningCount > 0 ? 'warning' : 'clean';
   const statusLabel = busy ? '⏳ Analyzing…' : !snapshot ? 'Open a folder' : status === 'error' ? '⚠ Issues found' : status === 'warning' ? '◐ Needs review' : '✓ Clean';
+  function buildSummary(): string {
+    if (!snapshot) return '';
+    const lines = [`**Code X-Ray:** ${snapshot.files.length} files, ${snapshot.edges.length} dependencies, ${snapshot.findings.length} findings.`];
+    if (diff) lines.push(`Changes: +${diff.addedFiles.length}/−${diff.removedFiles.length} files, +${diff.addedEdges.length}/−${diff.removedEdges.length} dependencies, ${diff.newFindings.length} new / ${diff.resolvedFindings.length} resolved findings.`);
+    for (const item of snapshot.findings) lines.push(`- ${item.severity === 'error' ? '🚫' : '⚠️'} **${item.rule}** — ${item.message}`);
+    if (snapshot.findings.length === 0) lines.push('- ✅ No findings under the configured rules.');
+    return lines.join('\n');
+  }
+  async function copySummary(): Promise<void> {
+    try { await navigator.clipboard.writeText(buildSummary()); setCopyState('copied'); } catch { setCopyState('error'); }
+    setTimeout(() => setCopyState('idle'), 1800);
+  }
+  function exportImage(): void {
+    const uri = graph.current?.png({ bg: '#101722', full: true, scale: 2, output: 'base64uri' });
+    if (uri) host.postMessage({ type: 'export-image', dataUrl: uri });
+  }
   return <main>
-    <header><div><div className="eyebrow">ARCHITECTURE OBSERVATORY</div><h1>Code X-Ray <span>0.1</span></h1><p>{workspace} · Saved files · Local analysis</p></div><div className="actions"><button onClick={() => host.postMessage({ type: 'refresh' })} disabled={busy}>Refresh</button><button onClick={() => host.postMessage({ type: 'compare' })}>Compare Git…</button><button disabled={!report || busy || !!error} onClick={() => host.postMessage({ type: 'export' })}>Export JSON</button></div></header>
+    <header><div><div className="eyebrow">ARCHITECTURE OBSERVATORY</div><h1>Code X-Ray <span>0.1</span></h1><p>{workspace} · Saved files · Local analysis</p></div><div className="actions"><button onClick={() => host.postMessage({ type: 'refresh' })} disabled={busy}>Refresh</button><button onClick={() => host.postMessage({ type: 'compare' })}>Compare Git…</button><button disabled={!snapshot || busy} onClick={() => void copySummary()}>{copyState === 'copied' ? 'Copied ✓' : copyState === 'error' ? 'Copy failed' : 'Copy summary'}</button><button disabled={!report || busy || !!error} onClick={exportImage}>Export PNG</button><button disabled={!report || busy || !!error} onClick={() => host.postMessage({ type: 'export' })}>Export JSON</button></div></header>
     {error && <div className="error" role="alert">{error} {report && 'The map below is the previous successful result.'}</div>}
     <div className="stat-row" aria-live="polite">
       <div className="stat-card"><span className="stat-value">{snapshot?.files.length ?? '–'}</span><span className="stat-label">files</span></div>
@@ -137,12 +163,12 @@ function App(): React.JSX.Element {
       <span className={`status-badge status-${status}`}>{statusLabel}</span>
       <span className="baseline-tag">{report?.revision ? `Baseline ${report.revision.slice(0, 10)}` : 'No Git baseline selected'}</span>
     </div>
-    <div className="toolbar"><label>View <select value={mode} onChange={event => { setMode(event.target.value as Mode); setSelectedFinding(''); setSelectedEdge(''); }}><option value="current">Current</option><option value="baseline" disabled={!report?.baseline}>Baseline</option><option value="overlay" disabled={!report?.baseline}>Changes overlay</option></select></label><label className="search">Find file <input value={query} onChange={event => setQuery(event.target.value)} placeholder="src/services/…" /></label><button onClick={() => graph.current?.fit(undefined, 55)}>Fit map</button><details className="advanced-filters"><summary>More filters</summary><div className="filter-panel"><label><input type="checkbox" checked={showTypes} onChange={event => setShowTypes(event.target.checked)} /> Type imports</label><label><input type="checkbox" checked={onlyChanges} disabled={!diff} onChange={event => setOnlyChanges(event.target.checked)} /> Changed files only</label></div></details></div>
+    <div className="toolbar"><label>View <select value={mode} onChange={event => { setMode(event.target.value as Mode); setSelectedFinding(''); setSelectedEdge(''); }}><option value="current">Current</option><option value="baseline" disabled={!report?.baseline}>Baseline</option><option value="overlay" disabled={!report?.baseline}>Changes overlay</option></select></label><label className="search">Find file <input value={query} onChange={event => setQuery(event.target.value)} placeholder="src/services/…" /></label><button onClick={() => graph.current?.fit(undefined, 55)}>Fit map</button><details className="advanced-filters"><summary>More filters</summary><div className="filter-panel"><label><input type="checkbox" checked={showTypes} onChange={event => setShowTypes(event.target.checked)} /> Type imports</label><label><input type="checkbox" checked={onlyChanges} disabled={!diff} onChange={event => setOnlyChanges(event.target.checked)} /> Changed files only</label></div></details>{isolate && neighborIds && <span className="pill">🔎 Isolated: {selected} <button className="pill-close" onClick={() => setIsolate(false)} aria-label="Show full map">✕</button></span>}</div>
     {diff && <div className="changes">Files: +{diff.addedFiles.length} / −{diff.removedFiles.length} / {diff.modifiedFiles.length} modified <span>Dependencies: +{diff.addedEdges.length} / −{diff.removedEdges.length}</span><span>Findings: {diff.newFindings.length} new / {diff.resolvedFindings.length} resolved</span></div>}
     <div className="workspace"><section className="map-section"><div ref={canvas} className="graph" role="img" aria-label="Interactive file dependency map. Arrows point from importing file to dependency. Use the file list below for keyboard navigation." /><div className="legend"><span>● File size = physical lines</span><span className="amber">◉ Finding</span>{diff && <><span className="green">+ Added</span><span className="blue">● Modified</span><span className="pink">− Removed (overlay)</span></>}<span>Dashed = type import / removed edge</span></div>{visibleFiles.length > 800 && <p className="warning">Map limited to 800 of {visibleFiles.length} matching files. Narrow the file filter. The report contains the full analysis.</p>}{snapshot?.files.length === 0 && <p className="warning">No supported source files found. Open a TypeScript or JavaScript project.</p>}</section>
     <aside><h2>{finding ? 'Finding evidence' : edge ? 'Dependency evidence' : selectedNode ? 'File detail' : 'Inspect the architecture'}</h2>
       {!finding && !edge && !selectedNode && <p>Select a file, dependency or finding. Inspect the source before deciding whether a pattern is harmful.</p>}
-      {selectedNode && <><h3>{selectedNode.id}</h3><dl><dt>Physical lines</dt><dd>{selectedNode.lines}</dd><dt>Functions</dt><dd>{selectedNode.functions}</dd><dt>Branch constructs</dt><dd>{selectedNode.branches}</dd><dt>Internal fan-in / out</dt><dd>{selectedNode.fanIn} / {selectedNode.fanOut}</dd></dl><button onClick={() => openFile(selectedNode.id, 1, historical || !!diff?.removedFiles.includes(selectedNode.id))}>Open source</button><h3>Dependencies</h3>{related.slice(0, 100).map(link => <button className="text-button" key={link.id} onClick={() => { setSelectedEdge(link.id); setSelected(''); }}>{link.source === selected ? '→ ' + link.target : '← ' + link.source}{link.typeOnly ? ' (type)' : ''}</button>)}</>}
+      {selectedNode && <><h3>{selectedNode.id}</h3><dl><dt>Physical lines</dt><dd>{selectedNode.lines}</dd><dt>Functions</dt><dd>{selectedNode.functions}</dd><dt>Branch constructs</dt><dd>{selectedNode.branches}</dd><dt>Internal fan-in / out</dt><dd>{selectedNode.fanIn} / {selectedNode.fanOut}</dd></dl><div className="actions"><button onClick={() => openFile(selectedNode.id, 1, historical || !!diff?.removedFiles.includes(selectedNode.id))}>Open source</button><button onClick={() => setIsolate(value => !value)}>{isolate ? 'Show full map' : '🔎 Isolate this file'}</button></div><h3>Dependencies</h3>{related.slice(0, 100).map(link => <button className="text-button" key={link.id} onClick={() => { setSelectedEdge(link.id); setSelected(''); }}>{link.source === selected ? '→ ' + link.target : '← ' + link.source}{link.typeOnly ? ' (type)' : ''}</button>)}</>}
       {finding && <><p className={finding.severity === 'error' ? 'pink' : 'amber'}>{finding.message}</p><EvidenceList evidence={finding.evidence} historical={historical} /></>}
       {edge && <><h3>{edge.source} → {edge.target}</h3><p>{edge.kind}{edge.typeOnly ? ' · type only' : ''}</p><EvidenceList evidence={edge.evidence} historical={historical || !!diff?.removedEdges.includes(edge.id)} /></>}
     </aside></div>

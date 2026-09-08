@@ -25,8 +25,17 @@ export function activate(context: vscode.ExtensionContext): void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const output = vscode.window.createOutputChannel('Code X-Ray');
   const diagnostics = vscode.languages.createDiagnosticCollection('code-x-ray');
-  context.subscriptions.push(output, diagnostics, vscode.window.registerTreeDataProvider('codeXRay.launcher', new Launcher()));
+  const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+  statusBar.command = 'codeXRay.open'; statusBar.text = '$(circuit-board) Code X-Ray'; statusBar.tooltip = 'Open Code X-Ray architecture map'; statusBar.show();
+  context.subscriptions.push(output, diagnostics, statusBar, vscode.window.registerTreeDataProvider('codeXRay.launcher', new Launcher()));
   const send = (message: unknown) => { void panel?.webview.postMessage(message); };
+  function updateStatusBar(result: Report | undefined): void {
+    if (!result) { statusBar.text = '$(circuit-board) Code X-Ray'; statusBar.backgroundColor = undefined; return; }
+    const errors = result.current.findings.filter(item => item.severity === 'error').length;
+    const warnings = result.current.findings.length - errors;
+    statusBar.text = errors ? `$(error) X-Ray: ${errors} error${errors === 1 ? '' : 's'}` : warnings ? `$(warning) X-Ray: ${warnings} warning${warnings === 1 ? '' : 's'}` : '$(check) X-Ray: clean';
+    statusBar.backgroundColor = errors ? new vscode.ThemeColor('statusBarItem.errorBackground') : warnings ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
+  }
 
   async function chooseRoot(): Promise<boolean> {
     if (!vscode.workspace.isTrusted) { void vscode.window.showWarningMessage('Code X-Ray requires a trusted workspace.'); return false; }
@@ -64,7 +73,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const timeout = setTimeout(() => { if (token === generation) { void active.terminate(); fail('Analysis timed out after 120 seconds. Narrow the workspace.'); } }, 120000);
     function fail(message: string): void {
       if (token !== generation) return;
-      clearTimeout(timeout); worker = undefined; report = undefined; diagnostics.clear();
+      clearTimeout(timeout); worker = undefined; report = undefined; diagnostics.clear(); updateStatusBar(undefined);
       output.appendLine(message); send({ type: 'error', message }); void vscode.window.showErrorMessage(`Code X-Ray: ${message}`);
     }
     let responded = false;
@@ -73,7 +82,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (token !== generation) return;
       worker = undefined;
       if (!message.ok || !message.report) { fail(message.error ?? 'Analysis failed.'); return; }
-      report = message.report; publishDiagnostics(report); send({ type: 'report', report, workspace: root!.name });
+      report = message.report; publishDiagnostics(report); updateStatusBar(report); send({ type: 'report', report, workspace: root!.name });
       output.appendLine(`${new Date().toISOString()} ${report.current.files.length} files, ${report.current.edges.length} dependencies, ${report.current.findings.length} findings.`);
     });
     active.on('error', error => fail(error.message));
@@ -83,6 +92,12 @@ export function activate(context: vscode.ExtensionContext): void {
     if (!report) { void vscode.window.showInformationMessage('Analyze the project before exporting.'); return; }
     const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.joinPath(root!.uri, 'code-x-ray-report.json'), filters: { JSON: ['json'] } });
     if (uri) await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(report, null, 2) + '\n'));
+  }
+  async function exportImage(dataUrl: unknown): Promise<void> {
+    const prefix = 'data:image/png;base64,';
+    if (!root || !report || typeof dataUrl !== 'string' || !dataUrl.startsWith(prefix) || dataUrl.length > 25 * 1024 * 1024) return;
+    const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.joinPath(root.uri, 'code-x-ray-map.png'), filters: { PNG: ['png'] } });
+    if (uri) await vscode.workspace.fs.writeFile(uri, Buffer.from(dataUrl.slice(prefix.length), 'base64'));
   }
   async function openEvidence(file: unknown, line: unknown, baseline: unknown): Promise<void> {
     if (!root || !report || typeof file !== 'string' || typeof line !== 'number' || !Number.isSafeInteger(line) || line < 1) return;
@@ -115,6 +130,7 @@ export function activate(context: vscode.ExtensionContext): void {
         if (data.type === 'refresh') await refresh();
         if (data.type === 'compare') await compare();
         if (data.type === 'export') await exportReport();
+        if (data.type === 'export-image') await exportImage(data.dataUrl);
         if (data.type === 'open') await openEvidence(data.file, data.line, data.baseline);
       };
       void task().catch(error => { output.appendLine(String(error)); send({ type: 'error', message: String(error) }); });
