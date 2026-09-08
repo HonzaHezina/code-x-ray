@@ -50,4 +50,6 @@ Function-level call graph with labeled confidence/limitations, OpenTelemetry tra
 
 ## Product experiment
 
+**This is now the critical-path item, not an optional nice-to-have — see docs/ARCHITECTURE.md "Positioning relative to existing tools".** Being technically solid is not sufficient: this has to beat "run dependency-cruiser and eyeball the dot file" on a real developer's actual workflow, not just look better on paper. If it doesn't measurably win that comparison, the differentiated half of this project (live local panel + Git overlay + evidence-first UX) isn't earning its cost, and that's more informative than any amount of further feature work.
+
 Use 5–10 actual AI changes. Record review time, architectural issues correctly found and false positives with and without the map. Do not use the graph's appearance or a synthetic quality score as the success criterion.

@@ -85,6 +85,8 @@ Jestli je AI změna už commitnutá, použij například `HEAD~1` nebo konkrétn
 
 Skutečný rozdíl Code X-Ray není v žádné jednotlivé funkci, ale v průniku čtyř věcí najednou: **100 % lokálně, bez cloudu a bez LLM, živý interaktivní panel přímo v editoru (ne statický CLI výstup), Git overlay v jednom pohledu, a fakta s důkazem místo AI odhadu.** To je užší, ale reálná mezera — ne prázdné pole. Detaily a zdroje viz `docs/ARCHITECTURE.md` sekce "Positioning relative to existing tools".
 
+Z toho plynou dva praktické důsledky pro další vývoj (viz `docs/ROADMAP.md`): další čas se neinvestuje do CI/rules poloviny (SARIF, další typy pravidel) — tam už existuje zralá konkurence zdarma — a "Product experiment" (5–10 reálných AI změn, měřený čas review) přestává být volitelný krok na konci a stává se kritickou cestou. Nestačí být technicky solidní; musí to porazit "spustit dependency-cruiser a mrknout na dot soubor" na workflow konkrétního vývojáře, ne jen vypadat lépe na papíře.
+
 ## Pravidla projektu
 
 Do analyzované složky přidej `code-x-ray.config.json`:
