@@ -1,0 +1,5 @@
+{
+  "boundaries": [{ "name": "UI must use services, not the database", "from": "src/ui", "disallow": ["src/data"] }],
+  "fanOutWarning": 5,
+  "largeFileLines": 300
+}

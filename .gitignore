@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.test-build/
+*.vsix
+*.zip
+.DS_Store
+coverage/
+code-x-ray-report.json
+

@@ -1,0 +1,53 @@
+{
+  "name": "code-x-ray",
+  "displayName": "Code X-Ray",
+  "description": "Local architecture X-ray: dependency maps, cycle detection, boundary rules and Git graph comparison for TypeScript and JavaScript.",
+  "version": "0.1.0",
+  "publisher": "code-x-ray-local",
+  "license": "MIT",
+  "engines": { "vscode": "^1.95.0", "node": ">=22" },
+  "categories": ["Visualization", "Other"],
+  "main": "./dist/extension.cjs",
+  "activationEvents": ["onView:codeXRay.launcher"],
+  "capabilities": { "untrustedWorkspaces": { "supported": false }, "virtualWorkspaces": { "supported": false } },
+  "contributes": {
+    "commands": [
+      { "command": "codeXRay.open", "title": "Code X-Ray: Open Architecture Map" },
+      { "command": "codeXRay.refresh", "title": "Code X-Ray: Refresh Analysis" },
+      { "command": "codeXRay.compare", "title": "Code X-Ray: Compare with Git Revision" },
+      { "command": "codeXRay.export", "title": "Code X-Ray: Export JSON Report" }
+    ],
+    "viewsContainers": { "activitybar": [{ "id": "codeXRay", "title": "Code X-Ray", "icon": "media/xray.svg" }] },
+    "views": { "codeXRay": [{ "id": "codeXRay.launcher", "name": "Architecture" }] },
+    "configuration": { "title": "Code X-Ray", "properties": {
+      "codeXRay.autoRefresh": { "type": "boolean", "default": true, "description": "Refresh after saved files change. Unsaved buffers are not analyzed." },
+      "codeXRay.debounceMs": { "type": "number", "default": 1200, "minimum": 300, "description": "Delay before rescanning saved changes." }
+    }}
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test.mjs",
+    "check": "npm run typecheck && npm test && npm run build && npm run smoke",
+    "smoke": "node scripts/smoke.mjs",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies --allow-missing-repository",
+    "analyze": "node dist/cli.cjs"
+  },
+  "dependencies": {
+    "cytoscape": "3.33.1",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "typescript": "5.9.3"
+  },
+  "devDependencies": {
+    "@types/cytoscape": "3.21.9",
+    "@types/node": "22.18.0",
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "@types/vscode": "1.95.0",
+    "@vscode/vsce": "3.6.0",
+    "esbuild": "0.25.9"
+  }
+}

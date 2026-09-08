@@ -1,0 +1,8 @@
+{
+  "$schema": "./docs/config.schema.json",
+  "exclude": ["examples", "tests"],
+  "boundaries": [
+    { "name": "Core stays editor-independent", "from": "src/core", "disallow": ["src/extension", "src/webview"] },
+    { "name": "Webview never imports extension internals", "from": "src/webview", "disallow": ["src/extension"] }
+  ]
+}

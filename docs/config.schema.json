@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Code X-Ray configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "exclude": { "type": "array", "description": "Additional relative directory prefixes. No glob syntax. Defaults remain excluded.", "items": { "type": "string", "minLength": 1 } },
+    "maxFiles": { "type": "integer", "minimum": 1, "maximum": 10000, "default": 3000 },
+    "maxFileBytes": { "type": "integer", "minimum": 1, "maximum": 5242880, "default": 1048576 },
+    "maxTotalBytes": { "type": "integer", "minimum": 1, "maximum": 134217728, "default": 33554432 },
+    "fanOutWarning": { "type": "integer", "minimum": 1, "default": 15 },
+    "largeFileLines": { "type": "integer", "minimum": 1, "default": 500 },
+    "includeTypeOnlyInCycles": { "type": "boolean", "default": false },
+    "boundaries": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false, "required": ["name", "from", "disallow"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "from": { "type": "string", "minLength": 1, "description": "Relative source directory prefix." },
+          "disallow": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        }
+      }
+    }
+  }
+}
