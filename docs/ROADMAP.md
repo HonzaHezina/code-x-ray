@@ -4,6 +4,8 @@
 
 File-level TypeScript/JavaScript map, import kinds and evidence, cycles, explicit directory boundaries, fan-out/size signals, read-only Git comparison, overlay, Problems integration, local JSON CLI, bounded worker execution, test fixtures, packaging and CI.
 
+**2026-09-08 UI/ergonomics addendum** (no new dependency): summary stat cards + clean/warning/error status badge derived from existing finding counts; per-rule icons in the findings list; fade-in animation for newly rendered nodes; hover highlight on nodes/edges; a real focus mode that dims unrelated elements on selection; flexible canvas height; simplified toolbar (advanced filters collapsed behind "More filters"); a `node.modified` color change (blue, was amber) to stop colliding with the finding/risk amber; file isolation (ego-graph: show only the selected file and its direct neighbors); status bar item with live finding counts; "Copy summary" (Markdown) and "Copy as Mermaid" (bounded flowchart, ≤30 nodes) clipboard export for pasting into PR descriptions; "Export PNG" of the current canvas. All covered by `npm run check` including a new smoke assertion for the PNG export message path.
+
 ## P0 — validate on the actual developer workstation
 
 - Run F5 demo and packaged VSIX in VS Code.
@@ -30,7 +32,11 @@ Cache file AST-derived facts and resolution context. Invalidate on rename, confi
 
 Persist layout by workspace + graph schema. Add clear directory group boundaries, selection-aware filtering and search that retains relevant neighbors. Acceptance: unchanged nodes do not jump across refresh/restart; new nodes never overlap; keyboard users can inspect all evidence; large-map filtering explicitly indicates hidden nodes/edges.
 
+Partially delivered 2026-09-08: selection-aware filtering exists as file isolation (ego-graph) and focus/dim highlighting. Still open: cross-**restart** layout persistence (today positions only survive within one open webview session), directory group boundary lines on canvas (lanes exist but aren't visually bounded), a hierarchical/dagre layout alternative to the fixed directory grid, and directory collapse into meta-nodes for large graphs.
+
 ## P2 — better architecture signals
+
+Lower priority than previously scoped — competitive research (2026-09-08, see docs/ARCHITECTURE.md "Positioning relative to existing tools") found dependency-cruiser + eslint-plugin-boundaries already cover most of this ground for free and better for multi-language/monorepo cases. Effort is better spent on the P1 items above and the Product experiment below, which are the actually differentiated half of this project.
 
 - Scope-aware CommonJS resolution to eliminate shadowed require false positives.
 - Token-based duplicate candidates with side-by-side evidence; never assert semantic equivalence.

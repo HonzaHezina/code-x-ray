@@ -35,6 +35,20 @@
 - Source walks do not follow symlinks; compiler resolution may read declaration/config files to resolve modules. Workspace Trust and bounded source scans are required, not a general sandbox for adversarial filesystems.
 - Historical snapshots do not share live node_modules. This avoids silently claiming historical dependency fidelity, but unresolved package config extensions may affect comparisons.
 
+## Positioning relative to existing tools
+
+Researched 2026-09-08 to check for redundant effort before investing further. None of the individual ideas here are novel; the combination is the differentiator, and it is narrower than the README's framing might suggest.
+
+- **[dependency-cruiser](https://github.com/sverweij/dependency-cruiser)** is the closest functional overlap: mature, free, forbidden-dependency rules, cycle detection, CI gate, mermaid/dot/html output, better multi-language and monorepo support than this project. It is CLI-first — output is a static graph file, not a live interactive panel — and has no Git-baseline overlay in one view. A disciplined team could get most of the "rules + cycles + CI gate" value from dependency-cruiser + `eslint-plugin-boundaries` today with near-zero build effort.
+- **[Madge](https://www.npmjs.com/package/madge)** — simpler JS/TS graph + cycle detection, no rule engine, no VS Code panel.
+- **[CodeViz.ai](https://www.codeviz.ai/use-cases/code-review)** and **Revieko** are funded 2026 SaaS competitors targeting the identical stated use case ("review a PR with full architectural context, see what changed and its impact") — but as paid, partially cloud, LLM/embedding-based products, not local deterministic analysis.
+- **[CodeSee](https://www.codesee.io/)** occupied this exact positioning (PR review + onboarding maps) as a cloud SaaS; development has slowed and folded partly into GitKraken.
+- **[Sourcetrail](https://github.com/CoatiSoftware/Sourcetrail)** (discontinued) proved the "interactive cross-language graph inside a dev tool" concept had real users, but did not survive as a maintained product — a caution about scope creep and sustainability, not a signal the concept is wrong.
+- Nx/Turborepo project graphs do live interactive click-through graphs too, but scoped to monorepo task orchestration, not general TS import architecture or boundary rules.
+- `eslint-plugin-boundaries` / `eslint-plugin-import` (`no-cycle`) enforce the same boundary/cycle concepts as CI-time lint assertions with no visualization at all.
+
+**Conclusion for roadmap priority:** the CI/rules half of this project (P2 items like SARIF output, more rule types) competes with mature free tooling and should not be where further effort concentrates. The differentiated, currently unmatched-for-free-and-local half is the live in-editor panel + Git overlay + evidence-first data model — that is where P1 "visual review ergonomics" and the "Product experiment" (see docs/ROADMAP.md) should keep priority.
+
 ## Out of scope for 0.1
 
 Function-level calling relationships, runtime traces, duplicate detection, change coupling, AML, global language support, automatic refactoring, remote services, LLM explanations, marketplace publication.

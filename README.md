@@ -45,17 +45,25 @@ VSIX obsahuje sestavený analyzátor i všechny potřebné runtime knihovny. Pro
 - Evidence: soubor, řádek, sloupec, původní specifier importu. Nálezy také v panelu Problems.
 - Git snapshot bez přepnutí větve nebo zásahu do pracovního stromu; přidané/odstraněné soubory a vazby, změněný obsah, nové/vyřešené nálezy.
 - Přepínání Current / Baseline / Changes overlay. Polohy uzlů zůstávají zachované při obnovování v otevřené mapě.
+- Souhrnné karty (soubory/vazby/nálezy) a barevný stavový odznak (Clean / Needs review / Issues found) odvozený z aktuálních nálezů — žádné vymyšlené skóre.
+- Ikony podle typu nálezu, jemná animace nově zobrazených uzlů, hover zvýraznění a skutečný focus mode (výběr souboru/nálezu/hrany ztlumí nesouvisející část mapy).
+- **Izolace souboru** — zobrazení jen vybraného souboru a jeho přímých závislostí (ego graf), s rychlým zrušením.
+- Export mapy jako **PNG** obrázku a kopírování **Markdown souhrnu nálezů** nebo **Mermaid flowchart bloku** (omezený podgraf) do schránky pro vložení do popisu PR.
+- Status bar indikátor s počtem nálezů a klikem na otevření mapy.
+- Zjednodušený toolbar — pokročilé filtry (typové importy, jen změny) schované v rozbalovacím "More filters".
 - Analýza v odděleném workeru, debounce uložených změn, ukončení starého požadavku, časový a paměťový limit.
 - Lokální CLI, JSON export, kontrola pravidel v CI, demonstrační projekt, testy a návody pro AI asistenty.
 - Žádná telemetrie, síťová služba, AI účet ani spouštění analyzovaného projektu.
 
 ## Jak číst mapu
 
-Šipka míří **z importujícího souboru na jeho závislost**. Velikost uzlu odpovídá fyzickým řádkům. Oranžový okraj znamená nález. Při porovnání zelený okraj/vazba znamená přidání, žlutá výplň změněný obsah a růžové přerušované prvky odstranění (v overlay). Přerušované vazby mohou také znamenat typový import; detail vazby vždy ukáže přesný význam.
+Šipka míří **z importujícího souboru na jeho závislost**. Velikost uzlu odpovídá fyzickým řádkům. Oranžový okraj znamená nález. Při porovnání zelený okraj/vazba znamená přidání, **modrá výplň** změněný obsah a růžové přerušované prvky odstranění (v overlay) — modrá je záměrně odlišná od oranžové nálezů, aby se ty dva významy vizuálně nepletly. Přerušované vazby mohou také znamenat typový import; detail vazby vždy ukáže přesný význam.
 
 Vazby různých druhů mezi stejnými soubory jsou samostatné. Fan-in/out počítá **unikátní interní soubory**, nikoli počet importních příkazů. Branch constructs je počet vybraných syntaktických větvení, nikoli certifikovaná cyklomatická složitost.
 
 Kliknutí na současný důkaz otevře uložený soubor. U historického důkazu se zobrazí upozornění a kód je nutné otevřít přes Git historii; rozšíření zatím neposkytuje historický textový editor.
+
+Kliknutí na soubor, nález nebo vazbu ztlumí zbytek mapy (focus mode), aby vynikla vybraná část. Tlačítko **"🔎 Isolate this file"** u detailu souboru zobrazí jen jeho přímé sousedy — užitečné u větších projektů. Tlačítka **Copy summary** / **Copy as Mermaid** zkopírují textový, resp. Mermaid `flowchart` souhrn (u Mermaidu z izolovaného souboru, změněných souborů při Git porovnání, nebo z aktuálně vyfiltrovaného pohledu, max. 30 uzlů) do schránky pro vložení do popisu PR. **Export PNG** uloží aktuální plátno jako obrázek.
 
 ## Porovnání práce AI
 
@@ -66,6 +74,16 @@ Kliknutí na současný důkaz otevře uložený soubor. U historického důkazu
 5. Před přijetím změny stále proveď běžné testy a review významu kódu.
 
 Jestli je AI změna už commitnutá, použij například `HEAD~1` nebo konkrétní commit. `main` znamená přesný strom dané revize; automatický merge-base se nepočítá. Staged i unstaged změny se čtou jako současné soubory na disku. Neuložené editory se nečtou. Přejmenování je zatím odstranění + přidání.
+
+## Proč ne dependency-cruiser / CodeViz / CodeSee?
+
+Žádný jednotlivý nápad v Code X-Ray není nový — import graf, detekce cyklů, boundary pravidla a git-diff-proti-baseline mají všechny precedens. Konkrétně:
+
+- **[dependency-cruiser](https://github.com/sverweij/dependency-cruiser)** řeší pravidla + cykly + CI bránu už roky, zdarma a zaběhle, s lepší podporou monorepo/více jazyků. Pokud je hlavní bolest jen CI brána a detekce cyklů, dependency-cruiser je pravděpodobně lepší volba.
+- **[CodeViz.ai](https://www.codeviz.ai/) / Revieko** cílí přesně na "review PR s architektonickým kontextem" — stejné zadání jako Code X-Ray, ale jako placené cloud/AI služby (kód nebo jeho reprezentace opouští stroj).
+- **[CodeSee](https://www.codesee.io/)** dělal totéž jako cloud SaaS pro onboarding/review; vývoj zpomalil/přesunul se pod GitKraken. **[Sourcetrail](https://github.com/CoatiSoftware/Sourcetrail)** (interaktivní graf přímo v editoru, discontinued) je připomínka, že koncept sám o sobě nezaručuje udržitelnost.
+
+Skutečný rozdíl Code X-Ray není v žádné jednotlivé funkci, ale v průniku čtyř věcí najednou: **100 % lokálně, bez cloudu a bez LLM, živý interaktivní panel přímo v editoru (ne statický CLI výstup), Git overlay v jednom pohledu, a fakta s důkazem místo AI odhadu.** To je užší, ale reálná mezera — ne prázdné pole. Detaily a zdroje viz `docs/ARCHITECTURE.md` sekce "Positioning relative to existing tools".
 
 ## Pravidla projektu
 
