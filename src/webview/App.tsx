@@ -25,6 +25,7 @@ function App(): React.JSX.Element {
   const [onlyChanges, setOnlyChanges] = useState(false);
   const [isolate, setIsolate] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [mermaidState, setMermaidState] = useState<'idle' | 'copied' | 'error'>('idle');
   const canvas = useRef<HTMLDivElement>(null);
   const graph = useRef<Core | null>(null);
   const positions = useRef(new Map<string, { x: number; y: number }>());
@@ -145,16 +146,40 @@ function App(): React.JSX.Element {
     if (snapshot.findings.length === 0) lines.push('- ✅ No findings under the configured rules.');
     return lines.join('\n');
   }
-  async function copySummary(): Promise<void> {
-    try { await navigator.clipboard.writeText(buildSummary()); setCopyState('copied'); } catch { setCopyState('error'); }
-    setTimeout(() => setCopyState('idle'), 1800);
+  function buildMermaid(): string {
+    const cap = 30;
+    let nodeIds: Set<string>;
+    if (neighborIds) nodeIds = neighborIds;
+    else if (diff && changed.size) {
+      nodeIds = new Set(changed);
+      for (const link of data.edges) { if (changed.has(link.source)) nodeIds.add(link.target); if (changed.has(link.target)) nodeIds.add(link.source); }
+    } else nodeIds = new Set(visibleFiles.map(file => file.id));
+    const allNodes = data.files.filter(file => nodeIds.has(file.id));
+    const nodes = allNodes.slice(0, cap);
+    const keep = new Set(nodes.map(file => file.id));
+    const edges = data.edges.filter(link => keep.has(link.source) && keep.has(link.target));
+    const ids = new Map(nodes.map((file, index) => [file.id, `n${index}`]));
+    const escape = (text: string) => text.replace(/"/g, '&quot;');
+    const lines = ['flowchart LR'];
+    for (const file of nodes) {
+      const cls = diff?.addedFiles.includes(file.id) ? ':::added' : diff?.removedFiles.includes(file.id) ? ':::removed' : diff?.modifiedFiles.includes(file.id) ? ':::modified' : '';
+      lines.push(`  ${ids.get(file.id)}["${escape(file.id)}"]${cls}`);
+    }
+    for (const link of edges) lines.push(`  ${ids.get(link.source)} ${link.typeOnly ? '-.->' : '-->'} ${ids.get(link.target)}`);
+    if (diff) lines.push('classDef added fill:#1f6f54,color:#eafff5,stroke:#2da37c;', 'classDef removed fill:#5e2330,color:#ffe6ea,stroke:#dc617b,stroke-dasharray: 3 3;', 'classDef modified fill:#2c4a7a,color:#eaf2ff,stroke:#4d80c9;');
+    if (allNodes.length > cap) lines.push(`%% Showing ${cap} of ${allNodes.length} files. Narrow the search filter or isolate a file for a smaller diagram.`);
+    return '```mermaid\n' + lines.join('\n') + '\n```';
+  }
+  async function copyToClipboard(text: string, setState: (value: 'idle' | 'copied' | 'error') => void): Promise<void> {
+    try { await navigator.clipboard.writeText(text); setState('copied'); } catch { setState('error'); }
+    setTimeout(() => setState('idle'), 1800);
   }
   function exportImage(): void {
     const uri = graph.current?.png({ bg: '#101722', full: true, scale: 2, output: 'base64uri' });
     if (uri) host.postMessage({ type: 'export-image', dataUrl: uri });
   }
   return <main>
-    <header><div><div className="eyebrow">ARCHITECTURE OBSERVATORY</div><h1>Code X-Ray <span>0.1</span></h1><p>{workspace} · Saved files · Local analysis</p></div><div className="actions"><button onClick={() => host.postMessage({ type: 'refresh' })} disabled={busy}>Refresh</button><button onClick={() => host.postMessage({ type: 'compare' })}>Compare Git…</button><button disabled={!snapshot || busy} onClick={() => void copySummary()}>{copyState === 'copied' ? 'Copied ✓' : copyState === 'error' ? 'Copy failed' : 'Copy summary'}</button><button disabled={!report || busy || !!error} onClick={exportImage}>Export PNG</button><button disabled={!report || busy || !!error} onClick={() => host.postMessage({ type: 'export' })}>Export JSON</button></div></header>
+    <header><div><div className="eyebrow">ARCHITECTURE OBSERVATORY</div><h1>Code X-Ray <span>0.1</span></h1><p>{workspace} · Saved files · Local analysis</p></div><div className="actions"><button onClick={() => host.postMessage({ type: 'refresh' })} disabled={busy}>Refresh</button><button onClick={() => host.postMessage({ type: 'compare' })}>Compare Git…</button><button disabled={!snapshot || busy} onClick={() => void copyToClipboard(buildSummary(), setCopyState)}>{copyState === 'copied' ? 'Copied ✓' : copyState === 'error' ? 'Copy failed' : 'Copy summary'}</button><button disabled={!snapshot || busy} onClick={() => void copyToClipboard(buildMermaid(), setMermaidState)}>{mermaidState === 'copied' ? 'Copied ✓' : mermaidState === 'error' ? 'Copy failed' : 'Copy as Mermaid'}</button><button disabled={!report || busy || !!error} onClick={exportImage}>Export PNG</button><button disabled={!report || busy || !!error} onClick={() => host.postMessage({ type: 'export' })}>Export JSON</button></div></header>
     {error && <div className="error" role="alert">{error} {report && 'The map below is the previous successful result.'}</div>}
     <div className="stat-row" aria-live="polite">
       <div className="stat-card"><span className="stat-value">{snapshot?.files.length ?? '–'}</span><span className="stat-label">files</span></div>
